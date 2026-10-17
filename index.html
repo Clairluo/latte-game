@@ -220,6 +220,13 @@
 
 <script>
 (function () {
+  // 预加载图片，修复Safari图片空白问题
+const preloadImages = ['latte.png','doll.png'];
+preloadImages.forEach(src=>{
+  const img = new Image();
+  img.src = src;
+})
+
   "use strict";
 
   // ===== DOM =====
