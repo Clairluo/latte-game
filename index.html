@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>拿铁捡玩偶 🐶</title>
+<style>
+  /* ===== 全局重置 & 基础 ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-text-size-adjust: 100%;
+    user-select: none; -webkit-user-select: none;
+  }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Heiti SC", "Noto Sans CJK SC", sans-serif;
+    /* 奶白浅棕柔和渐变底色 */
+    background: linear-gradient(170deg, #FBF3E4 0%, #F5E8D2 45%, #EFDCC2 100%);
+    color: #6B4F3A;
+  }
+
+  /* ===== 游戏容器 ===== */
+  #game {
+    position: relative;
+    width: 100vw; height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ===== 顶部信息栏 ===== */
+  header {
+    position: relative; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(env(safe-area-inset-top, 0px) + 14px) 22px 12px;
+    background: rgba(251, 243, 228, 0.82);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-bottom: 2px dashed rgba(180, 134, 78, 0.28);
+  }
+  .score-box, .timer-box {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 16px; font-weight: 700; color: #8B6F5A;
+  }
+  .score-box span, .timer-box span {
+    font-size: 30px; font-weight: 800; color: #B8864E;
+    min-width: 1.4em; text-align: center;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+    transition: transform 0.15s ease;
+  }
+  .score-box span.bump { transform: scale(1.35); }
+  .title-mini {
+    font-size: 15px; font-weight: 700; color: #C49A6C;
+    letter-spacing: 1px; opacity: 0.85;
+  }
+
+  /* ===== 游戏区 ===== */
+  #play-area {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    z-index: 10;
+  }
+
+  /* 柔和装饰光斑 */
+  #play-area::before, #play-area::after {
+    content: ''; position: absolute; border-radius: 50%;
+    background: radial-gradient(circle, rgba(212,165,116,0.18), transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  #play-area::before { width: 200px; height: 200px; top: -40px; left: -50px; }
+  #play-area::after { width: 260px; height: 260px; bottom: 20px; right: -70px; }
+
+  /* ===== 掉落物 ===== */
+  .item {
+    position: absolute; top: 0; left: 0;
+    width: 72px; height: 72px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 15px; font-weight: 800; letter-spacing: 1px;
+    cursor: pointer; will-change: transform;
+    z-index: 10;
+    touch-action: none;
+    /* 默认占位：玩偶的浅粉可爱风 */
+  }
+  .item.doll {
+    background: radial-gradient(circle at 32% 30%, #FBD9D0, #F0B8A8 80%);
+    color: #A85C4C;
+    box-shadow: 0 6px 0 rgba(180,100,80,0.16), 0 10px 18px rgba(180,100,80,0.18), inset 0 -4px 8px rgba(200,110,90,0.18);
+    border: 3px solid rgba(255,255,255,0.7);
+  }
+  .item.stone {
+    background: radial-gradient(circle at 32% 30%, #C9C4BC, #A39E96 80%);
+    color: #6E6862;
+    box-shadow: 0 6px 0 rgba(90,86,80,0.18), 0 10px 16px rgba(90,86,80,0.20), inset 0 -4px 8px rgba(80,76,70,0.20);
+    border: 3px solid rgba(255,255,255,0.5);
+  }
+  .item .label { pointer-events: none; line-height: 1; }
+
+  /* 点击后的弹出动画通过 JS 直接设置 transform/opacity 实现，这里不写 keyframes 以免与 translateY 冲突 */
+
+  /* ===== 得分飘字 ===== */
+  .popup {
+    position: absolute; z-index: 30;
+    font-size: 26px; font-weight: 900;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: floatUp 0.8s ease-out forwards;
+    text-shadow: 0 2px 6px rgba(255,255,255,0.9);
+  }
+  .popup.pos { color: #E8855E; }
+  .popup.neg { color: #9A8B7A; }
+  @keyframes floatUp {
+    0%   { transform: translateX(-50%) translateY(0)    scale(1);   opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-58px) scale(1.4); opacity: 0; }
+  }
+
+  /* ===== 底部小狗装饰（拿铁） ===== */
+  #dog {
+    position: absolute; bottom: 2px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 52px; line-height: 1;
+    z-index: 5; pointer-events: none;
+    filter: drop-shadow(0 4px 6px rgba(120,90,60,0.25));
+    animation: dogBob 2.2s ease-in-out infinite;
+  }
+  @keyframes dogBob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(-8px); }
+  }
+
+  /* ===== 蒙层（开始 / 结束） ===== */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(251,243,228,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    padding: 28px;
+    transition: opacity 0.35s ease;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .card {
+    width: 100%; max-width: 360px;
+    background: linear-gradient(160deg, #FFFCF6, #F7EBD8);
+    border-radius: 32px;
+    padding: 40px 30px 34px;
+    text-align: center;
+    border: 3px solid rgba(212,165,116,0.35);
+    box-shadow: 0 18px 40px rgba(120,90,60,0.18), 0 4px 0 rgba(180,134,78,0.12);
+  }
+  .card .dog-big { font-size: 56px; display: block; margin-bottom: 6px; animation: dogBob 2.2s ease-in-out infinite; }
+  .card h1 {
+    font-size: 26px; font-weight: 900; color: #B8864E;
+    margin-bottom: 6px; letter-spacing: 2px;
+  }
+  .card .sub { font-size: 14px; color: #8B6F5A; margin-bottom: 18px; line-height: 1.6; }
+  .card .rules {
+    background: rgba(212,165,116,0.12);
+    border-radius: 18px; padding: 14px 16px; margin-bottom: 24px;
+    font-size: 13.5px; color: #6B4F3A; line-height: 1.9; text-align: left;
+  }
+  .card .rules b { color: #B8864E; }
+  .card .final-score {
+    font-size: 60px; font-weight: 900; color: #B8864E;
+    line-height: 1; margin: 6px 0 4px;
+    text-shadow: 0 3px 0 rgba(255,255,255,0.6);
+  }
+  .card .best { font-size: 14px; color: #8B6F5A; margin-bottom: 20px; }
+  .card .best b { color: #B8864E; }
+  .btn {
+    display: inline-block;
+    background: linear-gradient(180deg, #E0AC73, #C4904F);
+    color: #FFF; font-size: 18px; font-weight: 800; letter-spacing: 2px;
+    border: none; border-radius: 999px;
+    padding: 15px 44px; cursor: pointer;
+    box-shadow: 0 6px 0 #A67A3E, 0 10px 18px rgba(150,110,60,0.3);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    touch-action: manipulation;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #A67A3E, 0 4px 10px rgba(150,110,60,0.3); }
+</style>
+</head>
+<body>
+<div id="game">
+
+  <!-- 顶部信息 -->
+  <header>
+    <div class="score-box">得分<span id="score">0</span></div>
+    <div class="title-mini">拿铁捡玩偶</div>
+    <div class="timer-box">⏱<span id="timer">60</span></div>
+  </header>
+
+  <!-- 游戏区 -->
+  <div id="play-area">
+   <div id="dog">
+  <img src="latte.png" style="width:90px;height:90px;object-fit:contain;">
+</div>
+
+  </div>
+
+  <!-- 开始 / 结束蒙层 -->
+  <div id="overlay" class="overlay">
+    <div class="card" id="card">
+      <span class="dog-big">🐶</span>
+      <h1>拿铁捡玩偶</h1>
+      <div class="sub">小拿铁最爱的小玩偶掉下来啦，快帮它捡起来！</div>
+      <div class="rules">
+        🧸 点到 <b>玩偶</b>：+1 分<br>
+        🪨 点到 <b>石子</b>：-1 分<br>
+        ⏱ 限时 <b>60 秒</b>，看你能帮拿铁捡多少！
+      </div>
+      <button class="btn" id="start-btn">开始游戏</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ===== DOM =====
+  var playArea  = document.getElementById('play-area');
+  var scoreEl   = document.getElementById('score');
+  var timerEl   = document.getElementById('timer');
+  var overlay   = document.getElementById('overlay');
+  var card      = document.getElementById('card');
+  var startBtn  = document.getElementById('start-btn');
+
+  // ===== 游戏状态 =====
+  var STATE_READY   = 'ready';
+  var STATE_PLAYING = 'playing';
+  var STATE_ENDED   = 'ended';
+  var state = STATE_READY;
+
+  var score      = 0;
+  var timeLeft   = 60;
+  var GAME_TIME  = 60;
+  var items      = [];
+  var spawnTO   = null;
+  var countdown  = null;
+  var rafId      = null;
+  var lastTs     = 0;
+  var elapsed    = 0;          // 本局已用秒数，用于难度递增
+  var bestScore  = 0;
+
+  // 读取最高分
+  try { bestScore = parseInt(localStorage.getItem('naitie_best') || '0', 10) || 0; } catch (e) {}
+
+  // ===== 工具 =====
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function setScore(v) {
+    score = v;
+    scoreEl.textContent = score;
+    scoreEl.classList.remove('bump');
+    // 触发重绘再加 class，实现弹跳动画
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('bump');
+  }
+
+  function setTimer(v) { timerEl.textContent = v; }
+
+  // ===== 生成掉落物 =====
+  function spawnItem() {
+    if (state !== STATE_PLAYING) return;
+
+    // 石子出现概率：随时间略升，但不超过 38%
+    var stoneRate = Math.min(0.38, 0.26 + elapsed * 0.003);
+    var isStone = Math.random() < stoneRate;
+
+    var el = document.createElement('div');
+    el.className = 'item ' + (isStone ? 'stone' : 'doll');
+
+    // —— 占位文字区 ——
+    // 后续替换图片：把下面 label 的内容换成 <img> 即可（详见文末说明）
+   var label;
+if(isStone){
+  //石子：文字🪨
+  label = document.createElement('div');
+  label.textContent = '🪨';
+  label.style.fontSize = "48px";
+}else{
+  //玩偶图片
+  label = document.createElement('img');
+  label.src = 'doll.png';
+  label.style.objectFit = 'contain';
+}
+label.className = 'label';
+ 
+
+ label.style.width = '100%'; label.style.height = '100%'; label.style.objectFit = 'contain'; label.style.pointerEvents = 'none'; el.appendChild(label);
+
+    var size = 72;
+    var w = playArea.clientWidth;
+    var x = rand(6, Math.max(8, w - size - 6));
+
+    el.style.left = x + 'px';
+    el.style.top  = '0px';
+    el.style.transform = 'translateY(-90px)';  // 从屏幕上方开始
+
+    // 下落速度：随时间略增
+    var baseSpeed = isStone ? rand(2.2, 3.0) : rand(2.6, 3.6);
+    var speed = baseSpeed + elapsed * 0.035;
+
+    var item = {
+      el: el, x: x, y: -90, speed: speed,
+      isStone: isStone, size: size, tapped: false
+    };
+
+    // 点击 / 触摸
+    el.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      handleTap(item);
+    });
+
+    playArea.appendChild(el);
+    items.push(item);
+  }
+
+  // ===== 点击命中 =====
+  function handleTap(item) {
+    if (item.tapped || state !== STATE_PLAYING) return;
+    item.tapped = true;
+
+    if (item.isStone) {
+      setScore(score - 1);
+      showPopup(item, '-1', true);
+    } else {
+      setScore(score + 1);
+      showPopup(item, '+1', false);
+    }
+
+    // 弹出消失动画（直接写 transform，避免与 keyframes 的 translateY 冲突）
+    item.el.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
+    item.el.style.transform  = 'translateY(' + item.y + 'px) scale(1.6)';
+    item.el.style.opacity    = '0';
+
+    setTimeout(function () { removeItem(item, true); }, 320);
+  }
+
+  // ===== 得分飘字 =====
+  function showPopup(item, text, isNeg) {
+    var p = document.createElement('div');
+    p.className = 'popup ' + (isNeg ? 'neg' : 'pos');
+    p.textContent = text;
+    p.style.left = (item.x + item.size / 2) + 'px';
+    p.style.top  = (item.y + 8) + 'px';
+    playArea.appendChild(p);
+    setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 850);
+  }
+
+  // ===== 移除物 =====
+  function removeItem(item, isTapped) {
+    if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
+    var i = items.indexOf(item);
+    if (i > -1) items.splice(i, 1);
+  }
+
+  // ===== 主循环（下落） =====
+  function loop(ts) {
+    if (state !== STATE_PLAYING) return;
+    if (!lastTs) lastTs = ts;
+    var dt = ts - lastTs;
+    lastTs = ts;
+
+    var h = playArea.clientHeight;
+    var step = dt / 16.6667;  // 归一化到 60fps
+
+    for (var i = items.length - 1; i >= 0; i--) {
+      var it = items[i];
+      if (it.tapped) continue;
+      it.y += it.speed * step;
+      it.el.style.transform = 'translateY(' + it.y + 'px)';
+      // 超出底部：未接住，静默移除
+      if (it.y > h + 10) removeItem(it, false);
+    }
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ===== 定时生成 =====
+  function scheduleSpawn() {
+    if (state !== STATE_PLAYING) return;
+    // 生成间隔随时间缩短，最低 420ms
+    var delay = Math.max(420, 820 - elapsed * 7 + rand(-120, 120));
+    spawnTO = setTimeout(function () {
+      spawnItem();
+      scheduleSpawn();
+    }, delay);
+  }
+
+  // ===== 倒计时 =====
+  function startCountdown() {
+    countdown = setInterval(function () {
+      timeLeft--;
+      elapsed++;
+      setTimer(timeLeft);
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+  }
+
+  // ===== 开始 / 重开 =====
+  function startGame() {
+    // 清理上一局
+    cleanup();
+    score = 0; timeLeft = GAME_TIME; elapsed = 0;
+    setScore(0); setTimer(GAME_TIME);
+    items.forEach(function (it) { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); });
+    items = [];
+
+    overlay.classList.add('hidden');
+    state = STATE_PLAYING;
+    lastTs = 0;
+
+    scheduleSpawn();
+    startCountdown();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ===== 结束 =====
+  function endGame() {
+    state = STATE_ENDED;
+    cleanup();
+
+    // 更新最高分
+    if (score > bestScore) {
+      bestScore = score;
+      try { localStorage.setItem('naitie_best', String(bestScore)); } catch (e) {}
+    }
+
+    // 剩余物淡出
+    items.forEach(function (it) {
+      it.el.style.transition = 'opacity 0.4s ease';
+      it.el.style.opacity = '0';
+    });
+    setTimeout(function () {
+      items.forEach(function (it) { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); });
+      items = [];
+    }, 420);
+
+    // 结束面板
+    card.innerHTML =
+      '<span class="dog-big">🐶</span>' +
+      '<h1>时间到啦</h1>' +
+      '<div class="final-score">' + score + '</div>' +
+      '<div class="best">最高分 <b>' + bestScore + '</b></div>' +
+      (score >= bestScore && score > 0 ? '<div class="sub">新纪录！拿铁好开心～</div>' : '') +
+      '<button class="btn" id="start-btn">再玩一次</button>';
+    bindStart();
+    overlay.classList.remove('hidden');
+  }
+
+  // ===== 清理定时器 =====
+  function cleanup() {
+    if (spawnTO)  { clearTimeout(spawnTO);  spawnTO = null; }
+    if (countdown){ clearInterval(countdown); countdown = null; }
+    if (rafId)    { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  // ===== 绑定开始按钮（初始 & 结束重建后） =====
+  function bindStart() {
+    var b = document.getElementById('start-btn');
+    if (b) b.addEventListener('pointerdown', function (e) { e.preventDefault(); startGame(); });
+  }
+
+  // ===== 防止页面滚动 / 双击放大 =====
+  document.addEventListener('touchmove', function (e) {
+    if (state === STATE_PLAYING) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+
+  // ===== 启动 =====
+  bindStart();
+
+})();
+</script>
+</body>
+</html>
